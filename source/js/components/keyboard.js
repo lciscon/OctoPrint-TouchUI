@@ -80,7 +80,7 @@ TouchUI.prototype.components.keyboard = {
 
 		},
 		number: {
-			usePreview: false,
+			usePreview: true,
 			autoAccept: true,
 
 			display: {

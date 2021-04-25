@@ -6,7 +6,6 @@
     "type": "git",
     "url": "git://github.com/BillyBlaze/OctoPrint-TouchUI.git"
   },
-  "dependencies": {},
   "devDependencies": {
     "del": "^5.1.0",
     "gulp": "^4.0.2",
