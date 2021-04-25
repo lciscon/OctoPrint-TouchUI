@@ -368,6 +368,13 @@ TouchUI.prototype.components.keyboard = {
 	onShow: function(event, keyboard, el) {
 		var self = this;
 
+		//this clears the current value in numeric input fields.
+		//this avoids accidentally appending to the existing value and thus creating
+		//a very large number on critical numeric fields (e.g. hotend temperature)
+		if(keyboard.$el.attr("type") === "number") {
+ 			keyboard.$preview.val('').focus();
+		}
+
 		keyboard.$keyboard.find("button").on("mousedown, touchstart", function(e) {
 			var $elm = $(e.target);
 			$elm.addClass("touch-focus");
@@ -979,181 +986,6 @@ TouchUI.prototype.core.version = {
 
 }
 
-TouchUI.prototype.DOM.init = function() {
-
-	// Create new tab with printer status and make it active
-	this.DOM.create.printer.init(this.DOM.create.tabbar);
-	this.DOM.create.printer.menu.$elm.find('a').trigger("click");
-
-	// Create a new persistent dropdown
-	this.DOM.create.dropdown.init.call( this.DOM.create.dropdown );
-
-	// Add a webcam tab if it's defined
-	if ($("#webcam_container").length > 0) {
-		this.DOM.create.webcam.init(this.DOM.create.tabbar);
-	}
-
-	// Move all other items from tabbar into dropdown
-	this.DOM.move.sidebar.init.call(this);
-	this.DOM.move.navbar.init.call(this);
-	this.DOM.move.tabbar.init.call(this);
-	this.DOM.move.afterTabAndNav.call(this);
-	this.DOM.move.overlays.init.call(this);
-	this.DOM.move.terminal.init.call(this);
-
-	// Move connection sidebar into a new modal
-	this.DOM.move.connection.init(this.DOM.create.tabbar);
-
-	// Manipulate controls div
-	this.DOM.move.controls.init();
-
-	// Disable these bootstrap/jquery plugins
-	this.DOM.overwrite.tabdrop.call(this);
-	this.DOM.overwrite.modal.call(this);
-	this.DOM.overwrite.pnotify.call(this);
-
-	// Add class with how many tab-items
-	$("#tabs, #navbar").addClass("items-" + $("#tabs li:not(.hidden_touch)").length);
-
-	// Remove active class when clicking on a tab in the tabbar
-	$('#tabs [data-toggle=tab]').on("click", function() {
-		$("#all_touchui_settings").removeClass("item_active");
-	});
-
-	// If touch emulator is enabled, then disable dragging of a menu item for scrolling
-	if(!this.settings.hasTouch) {
-		$("#navbar ul.nav > li a").on("dragstart drop", function(e) {
-			return false;
-		});
-	}
-}
-
-TouchUI.prototype.DOM.cookies = {
-
-	get: function(key, isPlain) {
-		var name = (isPlain) ? key + "=" : "TouchUI." + key + "=";
-		var ca = document.cookie.split(';');
-		var tmp;
-		for(var i=0; i<ca.length; i++) {
-			var c = ca[i];
-			while (c.charAt(0)==' ') c = c.substring(1);
-			if (c.indexOf(name) == 0) tmp = c.substring(name.length,c.length);
-			return (isPlain) ? tmp : $.parseJSON(tmp);
-			
-		}
-		return undefined;
-	},
-
-	set: function(key, value, isPlain) {
-		key = (isPlain) ? key + "=" : "TouchUI." + key + "=";
-		var d = new Date();
-		d.setTime(d.getTime()+(360*24*60*60*1000));
-		var expires = "expires="+d.toUTCString();
-		document.cookie = key + value + "; " + expires;
-	},
-
-	toggleBoolean: function(key, isPlain) {
-		var value = $.parseJSON(this.get(key, isPlain) || "false");
-
-		if(value === true) {
-			this.set(key, "false", isPlain);
-		} else {
-			this.set(key, "true", isPlain);
-		}
-
-		return !value;
-
-	}
-
-}
-
-TouchUI.prototype.DOM.localstorage = {
-	store: JSON.parse(localStorage["TouchUI"] || "{}"),
-
-	get: function (key) {
-		return this.store[key];
-	},
-
-	set: function (key, value) {
-		this.store[key] = value;
-		localStorage["TouchUI"] = JSON.stringify(this.store);
-		return this.store[key];
-	},
-
-	toggleBoolean: function (key) {
-		var value = this.store[key] || false;
-
-		if(value === true) {
-			this.set(key, false);
-		} else {
-			this.set(key, true);
-		}
-
-		return !value;
-
-	}
-
-}
-
-// Since I messed up by releasing start_kweb3.xinit without disabling private
-// mode, we now need to check if we can store anything at all in localstorage
-// the missing -P will prevent any localstorage
-if (TouchUI.prototype.settings.hasLocalStorage) {
-	try {
-		localStorage["TouchUIcanWeHazStorage"] = "true";
-		TouchUI.prototype.DOM.storage = TouchUI.prototype.DOM.localstorage;
-		delete localStorage["TouchUIcanWeHazStorage"];
-	} catch(err) {
-
-		// TODO: remove this is future
-		if(TouchUI.prototype.settings.isEpiphanyOrKweb) {
-			$(function() {
-				new PNotify({
-					type: 'error',
-					title: "Private Mode detection:",
-					text: "Edit the startup file 'start_kweb3.xinit' in '~/OctoPrint-TouchUI-autostart/' "+
-						"and add the parameter 'P' after the dash. \n\n" +
-						"For more information see the v0.3.3 release notes.",
-					hide: false
-				});
-			});
-		}
-
-		console.info("Localstorage defined but failback to cookies due to errors.");
-		TouchUI.prototype.DOM.storage = TouchUI.prototype.DOM.cookies;
-	}
-} else {
-	TouchUI.prototype.DOM.storage = TouchUI.prototype.DOM.cookies;
-}
-
-TouchUI.prototype.DOM.storage.migration = (TouchUI.prototype.DOM.storage === TouchUI.prototype.DOM.localstorage) ? function migration() {
-
-	if (this.settings.hasLocalStorage) {
-		if (document.cookie.indexOf("TouchUI.") !== -1) {
-			console.info("TouchUI cookies migration.");
-
-			var name = "TouchUI.";
-			var ca = document.cookie.split(';');
-			for (var i=0; i<ca.length; i++) {
-				var c = ca[i];
-				while (c.charAt(0)==' ') c = c.substring(1);
-				if (c.indexOf(name) == 0) {
-					var string = c.substring(name.length,c.length);
-					string = string.split("=");
-					var value = $.parseJSON(string[1]);
-
-					console.info("Saving cookie", string[0], "with value", value, "to localstorage.");
-					this.DOM.storage.set(string[0], value);
-
-					console.info("Removing cookie", string[0]);
-					document.cookie = "TouchUI." + string[0] + "=; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-				}
-			}
-		}
-	}
-
-} : _.noop;
-
 TouchUI.prototype.knockout.bindings = function() {
 	var self = this;
 
@@ -1488,6 +1320,181 @@ TouchUI.prototype.knockout.viewModel = function() {
 		}
 	}
 }
+
+TouchUI.prototype.DOM.init = function() {
+
+	// Create new tab with printer status and make it active
+	this.DOM.create.printer.init(this.DOM.create.tabbar);
+	this.DOM.create.printer.menu.$elm.find('a').trigger("click");
+
+	// Create a new persistent dropdown
+	this.DOM.create.dropdown.init.call( this.DOM.create.dropdown );
+
+	// Add a webcam tab if it's defined
+	if ($("#webcam_container").length > 0) {
+		this.DOM.create.webcam.init(this.DOM.create.tabbar);
+	}
+
+	// Move all other items from tabbar into dropdown
+	this.DOM.move.sidebar.init.call(this);
+	this.DOM.move.navbar.init.call(this);
+	this.DOM.move.tabbar.init.call(this);
+	this.DOM.move.afterTabAndNav.call(this);
+	this.DOM.move.overlays.init.call(this);
+	this.DOM.move.terminal.init.call(this);
+
+	// Move connection sidebar into a new modal
+	this.DOM.move.connection.init(this.DOM.create.tabbar);
+
+	// Manipulate controls div
+	this.DOM.move.controls.init();
+
+	// Disable these bootstrap/jquery plugins
+	this.DOM.overwrite.tabdrop.call(this);
+	this.DOM.overwrite.modal.call(this);
+	this.DOM.overwrite.pnotify.call(this);
+
+	// Add class with how many tab-items
+	$("#tabs, #navbar").addClass("items-" + $("#tabs li:not(.hidden_touch)").length);
+
+	// Remove active class when clicking on a tab in the tabbar
+	$('#tabs [data-toggle=tab]').on("click", function() {
+		$("#all_touchui_settings").removeClass("item_active");
+	});
+
+	// If touch emulator is enabled, then disable dragging of a menu item for scrolling
+	if(!this.settings.hasTouch) {
+		$("#navbar ul.nav > li a").on("dragstart drop", function(e) {
+			return false;
+		});
+	}
+}
+
+TouchUI.prototype.DOM.cookies = {
+
+	get: function(key, isPlain) {
+		var name = (isPlain) ? key + "=" : "TouchUI." + key + "=";
+		var ca = document.cookie.split(';');
+		var tmp;
+		for(var i=0; i<ca.length; i++) {
+			var c = ca[i];
+			while (c.charAt(0)==' ') c = c.substring(1);
+			if (c.indexOf(name) == 0) tmp = c.substring(name.length,c.length);
+			return (isPlain) ? tmp : $.parseJSON(tmp);
+			
+		}
+		return undefined;
+	},
+
+	set: function(key, value, isPlain) {
+		key = (isPlain) ? key + "=" : "TouchUI." + key + "=";
+		var d = new Date();
+		d.setTime(d.getTime()+(360*24*60*60*1000));
+		var expires = "expires="+d.toUTCString();
+		document.cookie = key + value + "; " + expires;
+	},
+
+	toggleBoolean: function(key, isPlain) {
+		var value = $.parseJSON(this.get(key, isPlain) || "false");
+
+		if(value === true) {
+			this.set(key, "false", isPlain);
+		} else {
+			this.set(key, "true", isPlain);
+		}
+
+		return !value;
+
+	}
+
+}
+
+TouchUI.prototype.DOM.localstorage = {
+	store: JSON.parse(localStorage["TouchUI"] || "{}"),
+
+	get: function (key) {
+		return this.store[key];
+	},
+
+	set: function (key, value) {
+		this.store[key] = value;
+		localStorage["TouchUI"] = JSON.stringify(this.store);
+		return this.store[key];
+	},
+
+	toggleBoolean: function (key) {
+		var value = this.store[key] || false;
+
+		if(value === true) {
+			this.set(key, false);
+		} else {
+			this.set(key, true);
+		}
+
+		return !value;
+
+	}
+
+}
+
+// Since I messed up by releasing start_kweb3.xinit without disabling private
+// mode, we now need to check if we can store anything at all in localstorage
+// the missing -P will prevent any localstorage
+if (TouchUI.prototype.settings.hasLocalStorage) {
+	try {
+		localStorage["TouchUIcanWeHazStorage"] = "true";
+		TouchUI.prototype.DOM.storage = TouchUI.prototype.DOM.localstorage;
+		delete localStorage["TouchUIcanWeHazStorage"];
+	} catch(err) {
+
+		// TODO: remove this is future
+		if(TouchUI.prototype.settings.isEpiphanyOrKweb) {
+			$(function() {
+				new PNotify({
+					type: 'error',
+					title: "Private Mode detection:",
+					text: "Edit the startup file 'start_kweb3.xinit' in '~/OctoPrint-TouchUI-autostart/' "+
+						"and add the parameter 'P' after the dash. \n\n" +
+						"For more information see the v0.3.3 release notes.",
+					hide: false
+				});
+			});
+		}
+
+		console.info("Localstorage defined but failback to cookies due to errors.");
+		TouchUI.prototype.DOM.storage = TouchUI.prototype.DOM.cookies;
+	}
+} else {
+	TouchUI.prototype.DOM.storage = TouchUI.prototype.DOM.cookies;
+}
+
+TouchUI.prototype.DOM.storage.migration = (TouchUI.prototype.DOM.storage === TouchUI.prototype.DOM.localstorage) ? function migration() {
+
+	if (this.settings.hasLocalStorage) {
+		if (document.cookie.indexOf("TouchUI.") !== -1) {
+			console.info("TouchUI cookies migration.");
+
+			var name = "TouchUI.";
+			var ca = document.cookie.split(';');
+			for (var i=0; i<ca.length; i++) {
+				var c = ca[i];
+				while (c.charAt(0)==' ') c = c.substring(1);
+				if (c.indexOf(name) == 0) {
+					var string = c.substring(name.length,c.length);
+					string = string.split("=");
+					var value = $.parseJSON(string[1]);
+
+					console.info("Saving cookie", string[0], "with value", value, "to localstorage.");
+					this.DOM.storage.set(string[0], value);
+
+					console.info("Removing cookie", string[0]);
+					document.cookie = "TouchUI." + string[0] + "=; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+				}
+			}
+		}
+	}
+
+} : _.noop;
 
 TouchUI.prototype.plugins.init = function (viewModels) {
 	this.plugins.screenSquish(viewModels.pluginManagerViewModel);

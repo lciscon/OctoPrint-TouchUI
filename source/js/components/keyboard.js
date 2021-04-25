@@ -142,6 +142,13 @@ TouchUI.prototype.components.keyboard = {
 	onShow: function(event, keyboard, el) {
 		var self = this;
 
+		//this clears the current value in numeric input fields.
+		//this avoids accidentally appending to the existing value and thus creating
+		//a very large number on critical numeric fields (e.g. hotend temperature)
+		if(keyboard.$el.attr("type") === "number") {
+ 			keyboard.$preview.val('').focus();
+		}
+
 		keyboard.$keyboard.find("button").on("mousedown, touchstart", function(e) {
 			var $elm = $(e.target);
 			$elm.addClass("touch-focus");
